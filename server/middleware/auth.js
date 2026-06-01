@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import Store from '../models/Store.js';
 
 export const protect = async (req, res, next) => {
   try {
@@ -34,6 +35,12 @@ export const protect = async (req, res, next) => {
     }
 
     req.user = user;
+
+    if (user.role === 'storeOwner') {
+      const store = await Store.findOne({ owner: user._id });
+      if (store) req.user.storeId = store._id;
+    }
+
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {

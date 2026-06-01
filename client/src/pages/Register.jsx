@@ -6,14 +6,19 @@ import { useAuth } from '../hooks/useAuth';
 import AddressSelector from '../components/common/AddressSelector';
 import toast from 'react-hot-toast';
 import { BLOOD_GROUPS } from '../utils/constants';
-import { HiOutlineUser, HiOutlineMail, HiOutlinePhone, HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
+import {
+  Container, Box, Typography, Button, TextField, Select, MenuItem,
+  FormControl, InputLabel, Stepper, Step, StepLabel, Grid, Card, CardContent,
+  InputAdornment, IconButton, FormControlLabel, Checkbox, Stack,
+} from '@mui/material';
+import { Visibility, VisibilityOff, Person, Email, Phone, Lock } from '@mui/icons-material';
 
 export default function Register() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { isAuthenticated, user, loading, error } = useAuth();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
   const [role, setRole] = useState(searchParams.get('role') === 'store' ? 'storeOwner' : 'patient');
   const [showPw, setShowPw] = useState(false);
 
@@ -22,9 +27,8 @@ export default function Register() {
     dateOfBirth: '', gender: '', bloodGroup: '',
     appAddress: { division: '', district: '', upazilla: '', area: '' },
     exactAddress: '',
-    // Store fields
     pharmacyName: '', drugLicenseNumber: '', tradeLicenseNumber: '',
-    establishmentYear: '', logoUrl: '', coverPhotoUrl: '',
+    establishmentYear: '',
     operatingHours: { openingTime: '08:00', closingTime: '23:00', weeklyOffDay: 'None', is24Hours: false },
   });
 
@@ -42,214 +46,251 @@ export default function Register() {
 
   const set = (field, val) => setForm((p) => ({ ...p, [field]: val }));
 
-  const validateStep1 = () => {
-    if (!form.fullName || !form.email || !form.phone || !form.password) return toast.error('Fill all required fields.');
-    if (!/^\S+@\S+\.\S+$/.test(form.email)) return toast.error('Invalid email.');
-    if (!/^01[3-9]\d{8}$/.test(form.phone)) return toast.error('Invalid BD phone number.');
-    if (form.password.length < 8) return toast.error('Password must be 8+ characters.');
-    if (form.password !== form.confirmPassword) return toast.error('Passwords do not match.');
+  const validateStep = (stepIndex) => {
+    if (stepIndex === 0) {
+      if (!form.fullName || !form.email || !form.phone || !form.password) {
+        toast.error('Fill all required fields.');
+        return false;
+      }
+      if (!/^\S+@\S+\.\S+$/.test(form.email)) {
+        toast.error('Invalid email.');
+        return false;
+      }
+      if (!/^01[3-9]\d{8}$/.test(form.phone)) {
+        toast.error('Invalid BD phone number.');
+        return false;
+      }
+      if (form.password.length < 8) {
+        toast.error('Password must be 8+ characters.');
+        return false;
+      }
+      if (form.password !== form.confirmPassword) {
+        toast.error('Passwords do not match.');
+        return false;
+      }
+    }
+    if (stepIndex === 1 && role === 'storeOwner' && !form.pharmacyName) {
+      toast.error('Pharmacy name is required.');
+      return false;
+    }
+    if (stepIndex === 2) {
+      if (!form.appAddress.division || !form.appAddress.district || !form.appAddress.upazilla) {
+        toast.error('Select your location.');
+        return false;
+      }
+    }
     return true;
   };
 
   const handleSubmit = () => {
-    console.log('Submitting registration with data:', {
-      fullName: form.fullName,
-      email: form.email,
-      phone: form.phone,
-      appAddress: form.appAddress,
-    });
-    
     if (role === 'patient') {
       dispatch(registerPatient({
         fullName: form.fullName, email: form.email, phone: form.phone, password: form.password,
         dateOfBirth: form.dateOfBirth || undefined, gender: form.gender || undefined, bloodGroup: form.bloodGroup || undefined,
         appAddress: form.appAddress, exactAddress: form.exactAddress,
-      })).then((result) => {
-        console.log('Registration result:', result);
-        if (registerPatient.rejected.match(result)) {
-          console.error('Registration error payload:', result.payload);
-          console.error('Registration error meta:', result.meta);
-        }
-      }).catch((err) => {
-        console.error('Registration catch error:', err);
-      });
+      }));
     } else {
       dispatch(registerStoreOwner({
         fullName: form.fullName, email: form.email, phone: form.phone, password: form.password,
         pharmacyName: form.pharmacyName, drugLicenseNumber: form.drugLicenseNumber,
         tradeLicenseNumber: form.tradeLicenseNumber, establishmentYear: parseInt(form.establishmentYear) || undefined,
-        logoUrl: form.logoUrl, coverPhotoUrl: form.coverPhotoUrl,
         appAddress: form.appAddress, exactAddress: form.exactAddress,
         operatingHours: form.operatingHours,
-      })).then((result) => {
-        console.log('Registration result:', result);
-        if (registerStoreOwner.rejected.match(result)) {
-          console.error('Registration error payload:', result.payload);
-          console.error('Registration error meta:', result.meta);
-        }
-      }).catch((err) => {
-        console.error('Registration catch error:', err);
-      });
+      }));
     }
   };
 
-  const nextStep = () => {
-    if (step === 1 && !validateStep1()) return;
-    if (step === 2 && role === 'storeOwner' && !form.pharmacyName) return toast.error('Pharmacy name is required.');
-    if (step === 3 && (!form.appAddress.division || !form.appAddress.district || !form.appAddress.upazilla)) return toast.error('Select your location.');
-    setStep(step + 1);
+  const steps = role === 'storeOwner'
+    ? ['Basic Info', 'Pharmacy', 'Location', 'Hours']
+    : ['Basic Info', 'Personal', 'Location'];
+
+  const handleNext = () => {
+    if (!validateStep(step)) return;
+    if (step < steps.length - 1) setStep(step + 1);
+    else handleSubmit();
   };
 
-  const totalSteps = role === 'storeOwner' ? 4 : 3;
-
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-hidden">
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-emerald-500/[0.06] blur-[100px]" />
-        <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full bg-brand-500/[0.08] blur-[100px]" />
-      </div>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#f8fafc', py: 4 }}>
+      <Container maxWidth="sm">
+        <Box sx={{ textAlign: 'center', mb: 4 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 3 }}>
+            <Box sx={{
+              width: 40, height: 40, borderRadius: 1.5,
+              bgcolor: '#0d9488', display: 'flex',
+              alignItems: 'center', justifyContent: 'center'
+            }}>
+              <Typography sx={{ color: '#fff', fontWeight: 800 }}>P</Typography>
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              pharma<span style={{ color: '#0d9488' }}>Assist</span>
+            </Typography>
+          </Box>
+          <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>Create Account</Typography>
+          <Typography variant="body2" color="text.secondary">Join PharmaAssist today</Typography>
+        </Box>
 
-      <div className="w-full max-w-lg relative z-10">
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2.5 mb-6">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-emerald-500 flex items-center justify-center shadow-neon">
-              <span className="text-white font-display font-extrabold text-sm">P</span>
-            </div>
-            <span className="font-display font-bold text-xl"><span className="gradient-text">pharma</span><span className="text-surface-700 dark:text-surface-300">Assist</span></span>
-          </Link>
-          <h1 className="text-3xl font-display font-extrabold text-surface-900 dark:text-white">Create Account</h1>
-        </div>
+        <Card sx={{ p: 1, mb: 3 }}>
+          <Stepper activeStep={step} sx={{ '& .MuiStepLabel-label': { fontSize: 14 } }}>
+            {steps.map((label) => (
+              <Step key={label}><StepLabel>{label}</StepLabel></Step>
+            ))}
+          </Stepper>
+        </Card>
 
-        {/* Role Selector */}
-        <div className="flex gap-2 p-1 rounded-2xl bg-surface-100 dark:bg-surface-800 mb-6">
-          {[{ key: 'patient', label: '🙋 Patient' }, { key: 'storeOwner', label: '🏪 Store Owner' }].map((r) => (
-            <button key={r.key} onClick={() => { setRole(r.key); setStep(1); }}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${role === r.key ? 'bg-white dark:bg-surface-700 shadow-sm text-surface-900 dark:text-white' : 'text-surface-500 hover:text-surface-700'}`}>
-              {r.label}
-            </button>
-          ))}
-        </div>
+        <Card sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
+            {steps[step]}
+          </Typography>
 
-        {/* Progress */}
-        <div className="flex items-center gap-1.5 mb-6">
-          {Array.from({ length: totalSteps }).map((_, i) => (
-            <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i < step ? 'bg-gradient-to-r from-brand-500 to-emerald-500' : 'bg-surface-200 dark:bg-surface-700'}`} />
-          ))}
-        </div>
-
-        <div className="glass-strong rounded-3xl p-6 sm:p-8 shadow-glass-lg animate-fade-in">
-          {/* Step 1 — Basic */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <h2 className="font-display font-bold text-lg mb-4">Basic Information</h2>
-              <div>
-                <label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Full Name *</label>
-                <div className="relative"><HiOutlineUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                  <input value={form.fullName} onChange={(e) => set('fullName', e.target.value)} placeholder="Enter your full name" className="input-field pl-11" /></div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Email *</label>
-                <div className="relative"><HiOutlineMail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                  <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="you@example.com" className="input-field pl-11" /></div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Phone *</label>
-                <div className="relative"><HiOutlinePhone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                  <input value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="01XXXXXXXXX" className="input-field pl-11" /></div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Password *</label>
-                <div className="relative"><HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                  <input type={showPw ? 'text' : 'password'} value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="Min 8 characters" className="input-field pl-11 pr-11" />
-                  <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-400">{showPw ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}</button></div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Confirm Password *</label>
-                <input type="password" value={form.confirmPassword} onChange={(e) => set('confirmPassword', e.target.value)} placeholder="Repeat your password" className="input-field" />
-              </div>
-            </div>
+          {step === 0 && (
+            <Stack spacing={2.5}>
+              <TextField
+                label="Full Name" fullWidth required
+                value={form.fullName} onChange={(e) => set('fullName', e.target.value)}
+                InputProps={{ startAdornment: <InputAdornment position="start"><Person sx={{ color: '#9ca3af' }} /></InputAdornment> }}
+              />
+              <TextField
+                label="Email" type="email" fullWidth required
+                value={form.email} onChange={(e) => set('email', e.target.value)}
+                InputProps={{ startAdornment: <InputAdornment position="start"><Email sx={{ color: '#9ca3af' }} /></InputAdornment> }}
+              />
+              <TextField
+                label="Phone" fullWidth required
+                value={form.phone} onChange={(e) => set('phone', e.target.value)}
+                placeholder="01XXXXXXXXX"
+                InputProps={{ startAdornment: <InputAdornment position="start"><Phone sx={{ color: '#9ca3af' }} /></InputAdornment> }}
+              />
+              <TextField
+                label="Password" type={showPw ? 'text' : 'password'} fullWidth required
+                value={form.password} onChange={(e) => set('password', e.target.value)}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start"><Lock sx={{ color: '#9ca3af' }} /></InputAdornment>,
+                  endAdornment: <InputAdornment position="end">
+                    <IconButton onClick={() => setShowPw(!showPw)} edge="end">
+                      {showPw ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                }}
+              />
+              <TextField
+                label="Confirm Password" type="password" fullWidth required
+                value={form.confirmPassword} onChange={(e) => set('confirmPassword', e.target.value)}
+              />
+            </Stack>
           )}
 
-          {/* Step 2 — Role-specific */}
-          {step === 2 && role === 'patient' && (
-            <div className="space-y-4">
-              <h2 className="font-display font-bold text-lg mb-4">Personal Details <span className="text-surface-400 font-normal text-sm">(Optional)</span></h2>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Date of Birth</label>
-                  <input type="date" value={form.dateOfBirth} onChange={(e) => set('dateOfBirth', e.target.value)} className="input-field" /></div>
-                <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Gender</label>
-                  <select value={form.gender} onChange={(e) => set('gender', e.target.value)} className="input-field">
-                    <option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
-              </div>
-              <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Blood Group</label>
-                <select value={form.bloodGroup} onChange={(e) => set('bloodGroup', e.target.value)} className="input-field">
-                  <option value="">Select</option>{BLOOD_GROUPS.map((b) => <option key={b}>{b}</option>)}</select></div>
-            </div>
+          {step === 1 && role === 'patient' && (
+            <Stack spacing={2.5}>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField label="Date of Birth" type="date" fullWidth
+                    value={form.dateOfBirth} onChange={(e) => set('dateOfBirth', e.target.value)}
+                    slotProps={{ htmlInput: { max: '2009-01-01' } }} />
+                </Grid>
+                <Grid item xs={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Gender</InputLabel>
+                    <Select value={form.gender} label="Gender" onChange={(e) => set('gender', e.target.value)}>
+                      <MenuItem value=""><em>Select</em></MenuItem>
+                      <MenuItem value="Male">Male</MenuItem>
+                      <MenuItem value="Female">Female</MenuItem>
+                      <MenuItem value="Other">Other</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+              <FormControl fullWidth>
+                <InputLabel>Blood Group</InputLabel>
+                <Select value={form.bloodGroup} label="Blood Group" onChange={(e) => set('bloodGroup', e.target.value)}>
+                  <MenuItem value=""><em>Select</em></MenuItem>
+                  {BLOOD_GROUPS.map((b) => <MenuItem key={b} value={b}>{b}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Stack>
           )}
 
-          {step === 2 && role === 'storeOwner' && (
-            <div className="space-y-4">
-              <h2 className="font-display font-bold text-lg mb-4">Pharmacy Information</h2>
-              <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Pharmacy Name *</label>
-                <input value={form.pharmacyName} onChange={(e) => set('pharmacyName', e.target.value)} placeholder="e.g., New Life Pharmacy" className="input-field" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Drug License No.</label>
-                  <input value={form.drugLicenseNumber} onChange={(e) => set('drugLicenseNumber', e.target.value)} className="input-field" /></div>
-                <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Trade License No.</label>
-                  <input value={form.tradeLicenseNumber} onChange={(e) => set('tradeLicenseNumber', e.target.value)} className="input-field" /></div>
-              </div>
-              <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Establishment Year</label>
-                <input type="number" value={form.establishmentYear} onChange={(e) => set('establishmentYear', e.target.value)} placeholder="e.g., 2015" className="input-field" /></div>
-            </div>
+          {step === 1 && role === 'storeOwner' && (
+            <Stack spacing={2.5}>
+              <TextField label="Pharmacy Name *" fullWidth required
+                value={form.pharmacyName} onChange={(e) => set('pharmacyName', e.target.value)} />
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField label="Drug License No." fullWidth
+                    value={form.drugLicenseNumber} onChange={(e) => set('drugLicenseNumber', e.target.value)} />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField label="Trade License No." fullWidth
+                    value={form.tradeLicenseNumber} onChange={(e) => set('tradeLicenseNumber', e.target.value)} />
+                </Grid>
+              </Grid>
+              <TextField label="Establishment Year" type="number" fullWidth
+                value={form.establishmentYear} onChange={(e) => set('establishmentYear', e.target.value)} />
+            </Stack>
           )}
 
-          {/* Step 3 — Address (shared) */}
-          {((step === 3 && role === 'storeOwner') || (step === 2 + 1 && role === 'patient')) && step === 3 && (
-            <div className="space-y-4">
-              <h2 className="font-display font-bold text-lg mb-4">Location</h2>
+          {step === 2 && (
+            <Stack spacing={2.5}>
               <AddressSelector value={form.appAddress} onChange={(v) => set('appAddress', v)} />
-              <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Exact Address</label>
-                <textarea value={form.exactAddress} onChange={(e) => set('exactAddress', e.target.value)} placeholder="Full physical address..." rows={2} className="input-field resize-none" /></div>
-            </div>
+              <TextField label="Exact Address" multiline rows={2} fullWidth
+                value={form.exactAddress} onChange={(e) => set('exactAddress', e.target.value)} />
+            </Stack>
           )}
 
-          {/* Step 4 — Operating hours (store only) */}
-          {step === 4 && role === 'storeOwner' && (
-            <div className="space-y-4">
-              <h2 className="font-display font-bold text-lg mb-4">Operating Hours</h2>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Opening</label>
-                  <input type="time" value={form.operatingHours.openingTime} onChange={(e) => set('operatingHours', { ...form.operatingHours, openingTime: e.target.value })} className="input-field" /></div>
-                <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Closing</label>
-                  <input type="time" value={form.operatingHours.closingTime} onChange={(e) => set('operatingHours', { ...form.operatingHours, closingTime: e.target.value })} className="input-field" /></div>
-              </div>
-              <div><label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Weekly Off Day</label>
-                <select value={form.operatingHours.weeklyOffDay} onChange={(e) => set('operatingHours', { ...form.operatingHours, weeklyOffDay: e.target.value })} className="input-field">
-                  {['None', 'Friday', 'Saturday', 'Sunday'].map((d) => <option key={d}>{d}</option>)}</select></div>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={form.operatingHours.is24Hours} onChange={(e) => set('operatingHours', { ...form.operatingHours, is24Hours: e.target.checked })}
-                  className="w-4 h-4 rounded border-surface-300 text-brand-500 focus:ring-brand-500" />
-                <span className="text-sm font-medium">Open 24/7</span></label>
-            </div>
+          {step === 3 && role === 'storeOwner' && (
+            <Stack spacing={2.5}>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField label="Opening Time" type="time" fullWidth
+                    value={form.operatingHours.openingTime}
+                    onChange={(e) => set('operatingHours', { ...form.operatingHours, openingTime: e.target.value })} />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField label="Closing Time" type="time" fullWidth
+                    value={form.operatingHours.closingTime}
+                    onChange={(e) => set('operatingHours', { ...form.operatingHours, closingTime: e.target.value })} />
+                </Grid>
+              </Grid>
+              <FormControl fullWidth>
+                <InputLabel>Weekly Off Day</InputLabel>
+                <Select value={form.operatingHours.weeklyOffDay} label="Weekly Off Day"
+                  onChange={(e) => set('operatingHours', { ...form.operatingHours, weeklyOffDay: e.target.value })}>
+                  {['None', 'Friday', 'Saturday', 'Sunday'].map((d) => <MenuItem key={d} value={d}>{d}</MenuItem>)}
+                </Select>
+              </FormControl>
+              <FormControlLabel control={
+                <Checkbox checked={form.operatingHours.is24Hours}
+                  onChange={(e) => set('operatingHours', { ...form.operatingHours, is24Hours: e.target.checked })} />
+              } label="Open 24/7" />
+            </Stack>
           )}
 
-          {/* Navigation */}
-          <div className="flex items-center justify-between mt-8 pt-5 border-t border-surface-200/50 dark:border-surface-700/30">
-            {step > 1 ? (
-              <button onClick={() => setStep(step - 1)} className="btn-secondary text-sm">← Back</button>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 4 }}>
+            {step > 0 ? (
+              <Button onClick={() => setStep(step - 1)}>Back</Button>
             ) : (
-              <Link to="/login" className="text-sm text-surface-500 hover:text-surface-700 transition-colors">Already have an account?</Link>
+              <Typography variant="body2" sx={{ color: '#6b7280' }}>
+                Already have an account? <Link to="/login" style={{ color: '#0d9488', textDecoration: 'none' }}>Sign in</Link>
+              </Typography>
             )}
-            {step < totalSteps ? (
-              <button onClick={nextStep} className="btn-primary text-sm">Next →</button>
-            ) : (
-              <button onClick={handleSubmit} disabled={loading} className="btn-emerald text-sm">
-                {loading ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Creating...</span> : 'Create Account ✓'}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+            <Button variant="contained" onClick={handleNext} disabled={loading}>
+              {step < steps.length - 1 ? 'Next' : 'Create Account'}
+            </Button>
+          </Stack>
+        </Card>
+
+        <Box sx={{ textAlign: 'center', mt: 3 }}>
+          <Typography variant="body2" sx={{ color: '#6b7280', mb: 1.5 }}>Register as</Typography>
+          <Stack direction="row" spacing={2} justifyContent="center">
+            {[{ key: 'patient', label: 'Patient' }, { key: 'storeOwner', label: 'Store Owner' }].map((r) => (
+              <Button key={r.key} variant={role === r.key ? 'contained' : 'outlined'} size="small"
+                onClick={() => { setRole(r.key); setStep(0); }}>
+                {r.label}
+              </Button>
+            ))}
+          </Stack>
+        </Box>
+      </Container>
+    </Box>
   );
 }

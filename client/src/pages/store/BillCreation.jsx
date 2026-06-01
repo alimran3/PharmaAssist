@@ -1,15 +1,20 @@
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../utils/api';
-import GlassCard from '../../components/ui/GlassCard';
-import { formatCurrency, getMedicineImage } from '../../utils/helpers';
-import { PAYMENT_METHODS } from '../../utils/constants';
-import toast from 'react-hot-toast';
+import { createPortal } from 'react-dom';
 import {
-  HiOutlineSearch, HiOutlineTrash, HiOutlinePlus,
-  HiOutlineMinus, HiOutlineExclamation, HiOutlineUser,
-  HiOutlineReceiptTax, HiOutlineDownload, HiOutlineShieldExclamation,
-} from 'react-icons/hi';
+  Box, Container, Typography, Card, CardContent, TextField,
+  Grid, Button, Stack, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, Paper, Chip, MenuItem,
+  Dialog, DialogTitle, DialogContent, DialogActions,
+  InputAdornment, IconButton, Divider, Alert,
+} from '@mui/material';
+import {
+  Add, Search, Delete, Remove, Person, Receipt, Download,
+  LocalPharmacy, Info, Warning, Error as ErrorIcon,
+} from '@mui/icons-material';
+import api from '../../utils/api';
+import toast from 'react-hot-toast';
+import { formatCurrency } from '../../utils/helpers';
 
 export default function BillCreation() {
   const navigate = useNavigate();
@@ -27,20 +32,9 @@ export default function BillCreation() {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [generatedBill, setGeneratedBill] = useState(null);
+  const [conflictWarnings, setConflictWarnings] = useState([]);
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
 
-  // Search patient
-  useEffect(() => {
-    if (patientSearch.length < 3) { setPatientResults([]); return; }
-    const timer = setTimeout(async () => {
-      try {
-        const { data } = await api.get('/patients/search', { params: { q: patientSearch } });
-        setPatientResults(data.data.patients);
-      } catch { /* ignore */ }
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [patientSearch]);
-
-  // Search own inventory
   useEffect(() => {
     if (medSearch.length < 2) { setInventoryResults([]); return; }
     const timer = setTimeout(async () => {
@@ -48,9 +42,20 @@ export default function BillCreation() {
         const { data } = await api.get('/inventory/my-store', { params: { search: medSearch, limit: 10 } });
         setInventoryResults(data.data.inventory.filter((i) => i.status === 'active' && i.stockQuantity > 0));
       } catch { /* ignore */ }
-    }, 400);
+    }, 300);
     return () => clearTimeout(timer);
   }, [medSearch]);
+
+  useEffect(() => {
+    if (patientSearch.length < 3) { setPatientResults([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await api.get('/patients/search', { params: { q: patientSearch } });
+        setPatientResults(data.data.patients);
+      } catch { /* ignore */ }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [patientSearch]);
 
   const selectPatient = (p) => {
     setPatient(p);
@@ -74,7 +79,7 @@ export default function BillCreation() {
         medicineName: invItem.medicine?.brandName || '',
         strength: invItem.medicine?.strength || '',
         unitPrice: invItem.sellingPrice,
-        discountOverride: invItem.discountPercentage,
+        discountOverride: invItem.discountPercentage || 0,
         quantity: 1,
         maxStock: invItem.stockQuantity,
         imageUrl: invItem.imageUrl || invItem.medicine?.imageUrl,
@@ -95,6 +100,7 @@ export default function BillCreation() {
 
   const removeItem = (idx) => {
     setBillItems(billItems.filter((_, i) => i !== idx));
+    setConflictWarnings([]);
   };
 
   const subtotal = billItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
@@ -102,6 +108,34 @@ export default function BillCreation() {
     return sum + (item.unitPrice * item.quantity * (item.discountOverride / 100));
   }, 0);
   const grandTotal = subtotal - totalDiscount;
+
+  const checkConflicts = async () => {
+    if (!patient || billItems.length === 0) return { warnings: [], hasConflicts: false };
+
+    try {
+      const { data } = await api.post('/bills/check-conflicts', {
+        patientId: patient._id,
+        items: billItems.map((item) => ({
+          inventoryItemId: item.inventoryItemId,
+          quantity: item.quantity,
+        })),
+      });
+      return data.data;
+    } catch (err) {
+      console.error('Conflict check failed:', err);
+      return { warnings: [], hasConflicts: false };
+    }
+  };
+
+  const handleCheckConflicts = async () => {
+    const result = await checkConflicts();
+    if (result.hasConflicts) {
+      setConflictWarnings(result.warnings);
+      setShowConflictDialog(true);
+    } else {
+      toast.success('No conflicts detected. Safe to proceed.');
+    }
+  };
 
   const handleSubmit = async () => {
     if (billItems.length === 0) return toast.error('Add at least one medicine.');
@@ -126,6 +160,7 @@ export default function BillCreation() {
 
       const { data } = await api.post('/bills', payload);
       setGeneratedBill(data.data.bill);
+      setConflictWarnings([]);
       toast.success(`Bill ${data.data.bill.billNumber} created!`);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to create bill.');
@@ -134,7 +169,6 @@ export default function BillCreation() {
     }
   };
 
-  // Bill generated — success view
   if (generatedBill) {
     const downloadPDF = async () => {
       try {
@@ -149,243 +183,316 @@ export default function BillCreation() {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
       } catch (error) {
-        console.error('PDF download error:', error);
-        alert('Failed to download PDF. Please try again.');
+        toast.error('Failed to download PDF');
       }
     };
 
     return (
-      <div className="page-container max-w-2xl">
-        <GlassCard className="text-center">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center mb-4 shadow-neon-emerald">
-            <HiOutlineReceiptTax className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-display font-extrabold text-surface-900 dark:text-white">Bill Created!</h1>
-          <p className="text-surface-500 mt-1">{generatedBill.billNumber}</p>
-          <p className="text-3xl font-display font-extrabold gradient-text mt-4">{formatCurrency(generatedBill.grandTotal)}</p>
-          <p className="text-sm text-surface-500 mt-1">{generatedBill.items.length} items · {generatedBill.paymentMethod}</p>
+      <Box sx={{ p: 4, maxWidth: 600, mx: 'auto' }}>
+        <Card sx={{ textAlign: 'center', p: 4 }}>
+          <Box sx={{
+            width: 64, height: 64, borderRadius: 2,
+            bgcolor: '#0d9488', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            mx: 'auto', mb: 3
+          }}>
+            <Receipt sx={{ color: '#fff', fontSize: 32 }} />
+          </Box>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>Bill Created!</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {generatedBill.billNumber}
+          </Typography>
+          <Typography variant="h3" sx={{ fontWeight: 700, color: '#0d9488', mt: 2 }}>
+            {formatCurrency(generatedBill.grandTotal)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {generatedBill.items.length} items · {generatedBill.paymentMethod}
+          </Typography>
 
-          <div className="flex items-center justify-center gap-3 mt-8">
-            <button onClick={() => navigate('/store')} className="btn-secondary text-sm">← Dashboard</button>
-            <button onClick={downloadPDF} className="btn-primary text-sm">
-              <HiOutlineDownload className="w-4 h-4" /> Download PDF
-            </button>
-            <button onClick={() => { setGeneratedBill(null); setBillItems([]); setPatient(null); }} className="btn-emerald text-sm">
+          <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 4 }}>
+            <Button variant="outlined" onClick={() => navigate('/store')}>
+              Dashboard
+            </Button>
+            <Button variant="contained" startIcon={<Download />} onClick={downloadPDF}>
+              Download PDF
+            </Button>
+            <Button variant="contained" color="success" startIcon={<Add />}
+              onClick={() => { setGeneratedBill(null); setBillItems([]); setPatient(null); }}>
               New Bill
-            </button>
-          </div>
-        </GlassCard>
-      </div>
+            </Button>
+          </Stack>
+        </Card>
+      </Box>
     );
   }
 
   return (
-    <div className="page-container">
-      <h1 className="section-title mb-6">Create New Bill</h1>
+    <Fragment>
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, mb: 4 }}>Create Bill</Typography>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Patient + Items */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Patient Section */}
-          <GlassCard>
-            <h2 className="font-display font-bold mb-3 flex items-center gap-2">
-              <HiOutlineUser className="w-5 h-5 text-brand-500" /> Link Patient
-              <span className="text-surface-400 font-normal text-sm">(Optional)</span>
-            </h2>
+      <Grid container spacing={3}>
+        <Grid item xs={12} lg={8}>
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Person sx={{ color: '#0d9488' }} />
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>Link Patient</Typography>
+                <Typography variant="caption" color="text.secondary">(Optional)</Typography>
+              </Box>
 
-            {patient ? (
-              <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/30">
-                <div>
-                  <p className="font-semibold text-sm">{patient.fullName}</p>
-                  <p className="text-xs text-surface-500">{patient.phone} · {patient.bloodGroup || 'N/A'}</p>
-                  {patient.allergies?.length > 0 && (
-                    <div className="flex gap-1 mt-1">
-                      {patient.allergies.map((a, i) => (
-                        <span key={i} className="badge badge-danger text-[10px]">⚠ {a.name}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <button onClick={() => setPatient(null)} className="text-xs text-red-500 hover:text-red-600 font-semibold">Remove</button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="relative">
-                  <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                  <input value={patientSearch} onChange={(e) => setPatientSearch(e.target.value)}
+              {patient ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, bgcolor: '#f0fdfa', borderRadius: 1 }}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{patient.fullName}</Typography>
+                    <Typography variant="caption" color="text.secondary">{patient.phone}</Typography>
+                    {patient.allergies?.length > 0 && (
+                      <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                        {patient.allergies.map((a, i) => (
+                          <Chip key={i} label={`Allergy: ${a.name}`} size="small" color="error" />
+                        ))}
+                      </Stack>
+                    )}
+                  </Box>
+                  <Button size="small" color="error" onClick={() => setPatient(null)}>Remove</Button>
+                </Box>
+              ) : (
+                <Box>
+                  <TextField
+                    fullWidth size="small"
                     placeholder="Search patient by name or phone..."
-                    className="input-field pl-10 text-sm" />
-                </div>
+                    value={patientSearch}
+                    onChange={(e) => setPatientSearch(e.target.value)}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start"><Search /></InputAdornment>,
+                    }}
+                  />
+                  {patientResults.length > 0 && createPortal(
+                    <Paper sx={{ position: 'fixed', top: '25%', left: '50%', transform: 'translateX(-50%)', width: '500px', maxWidth: '90vw', zIndex: 99999 }}>
+                      {patientResults.map((p) => (
+                        <Box key={p._id} sx={{ p: 2, cursor: 'pointer', '&:hover': { bgcolor: '#f8fafc' } }}
+                          onClick={() => selectPatient(p)}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{p.fullName}</Typography>
+                          <Typography variant="caption" color="text.secondary">{p.phone}</Typography>
+                        </Box>
+                      ))}
+                    </Paper>,
+                    document.body
+                  )}
+                  <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box component="label" sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={useWalkIn}
+                        onChange={(e) => setUseWalkIn(e.target.checked)} />
+                      <Typography variant="body2">Walk-in customer</Typography>
+                    </Box>
+                    {useWalkIn && (
+                      <TextField size="small" placeholder="Name"
+                        value={walkIn.name} onChange={(e) => setWalkIn({ ...walkIn, name: e.target.value })} />
+                    )}
+                  </Box>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
 
-                {patientResults.length > 0 && (
-                  <div className="glass rounded-xl overflow-hidden divide-y divide-surface-100 dark:divide-surface-800">
-                    {patientResults.map((p) => (
-                      <button key={p._id} onClick={() => selectPatient(p)}
-                        className="w-full p-3 text-left hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors text-sm">
-                        <span className="font-semibold">{p.fullName}</span>
-                        <span className="text-surface-500 ml-2">{p.phone}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+<Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <LocalPharmacy sx={{ color: '#0d9488' }} />
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>Add Medicines</Typography>
+              </Box>
 
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={useWalkIn} onChange={(e) => setUseWalkIn(e.target.checked)}
-                    className="w-4 h-4 rounded border-surface-300 text-brand-500 focus:ring-brand-500" />
-                  <span className="text-xs font-medium text-surface-600">Walk-in customer (optional name/phone)</span>
-                </label>
-
-                {useWalkIn && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={walkIn.name} onChange={(e) => setWalkIn({ ...walkIn, name: e.target.value })}
-                      placeholder="Customer name" className="input-field text-sm" />
-                    <input value={walkIn.phone} onChange={(e) => setWalkIn({ ...walkIn, phone: e.target.value })}
-                      placeholder="Phone (optional)" className="input-field text-sm" />
-                  </div>
-                )}
-              </div>
-            )}
-          </GlassCard>
-
-          {/* Add Medicine */}
-          <GlassCard>
-            <h2 className="font-display font-bold mb-3">Add Medicines</h2>
-            <div className="relative">
-              <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-              <input value={medSearch} onChange={(e) => setMedSearch(e.target.value)}
+              <TextField
+                fullWidth size="small"
                 placeholder="Search your inventory..."
-                className="input-field pl-10 text-sm" />
-            </div>
+                value={medSearch}
+                onChange={(e) => setMedSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start"><Search /></InputAdornment>,
+                }}
+              />
 
-            {inventoryResults.length > 0 && (
-              <div className="mt-2 glass rounded-xl overflow-hidden divide-y divide-surface-100 dark:divide-surface-800 max-h-48 overflow-y-auto">
-                {inventoryResults.map((inv) => (
-                  <button key={inv._id} onClick={() => addItem(inv)}
-                    className="w-full flex items-center gap-3 p-3 hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors text-left">
-                    <img src={getMedicineImage(inv.imageUrl || inv.medicine?.imageUrl)} alt=""
-                      className="w-9 h-9 rounded-lg object-cover bg-surface-100 dark:bg-surface-800" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{inv.medicine?.brandName} {inv.medicine?.strength}</p>
-                      <p className="text-[10px] text-surface-500">Stock: {inv.stockQuantity} · {formatCurrency(inv.sellingPrice)}</p>
-                    </div>
-                    <HiOutlinePlus className="w-4 h-4 text-emerald-500" />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Bill Items */}
-            {billItems.length > 0 && (
-              <div className="mt-4 space-y-2">
-                {billItems.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-surface-50 dark:bg-surface-800/50 border border-surface-200/50 dark:border-surface-700/30">
-                    <img src={getMedicineImage(item.imageUrl)} alt=""
-                      className="w-10 h-10 rounded-lg object-cover bg-surface-100 dark:bg-surface-700" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{item.medicineName} {item.strength}</p>
-                      <p className="text-xs text-surface-500">{formatCurrency(item.unitPrice)} / unit</p>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => updateQuantity(idx, -1)}
-                        className="w-7 h-7 rounded-lg bg-surface-200 dark:bg-surface-700 flex items-center justify-center hover:bg-surface-300 transition-colors">
-                        <HiOutlineMinus className="w-3 h-3" />
-                      </button>
-                      <span className="w-8 text-center font-semibold text-sm">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(idx, 1)}
-                        className="w-7 h-7 rounded-lg bg-surface-200 dark:bg-surface-700 flex items-center justify-center hover:bg-surface-300 transition-colors">
-                        <HiOutlinePlus className="w-3 h-3" />
-                      </button>
-                    </div>
-
-                    <p className="text-sm font-semibold w-20 text-right">
-                      {formatCurrency(item.unitPrice * item.quantity * (1 - item.discountOverride / 100))}
-                    </p>
-
-                    <button onClick={() => removeItem(idx)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors">
-                      <HiOutlineTrash className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </GlassCard>
-        </div>
-
-        {/* Right: Summary */}
-        <div className="space-y-5">
-          <GlassCard className="sticky top-20">
-            <h2 className="font-display font-bold mb-4">Bill Summary</h2>
-
-            {billItems.length === 0 ? (
-              <p className="text-sm text-surface-400 text-center py-6">No items added yet</p>
-            ) : (
-              <>
-                <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-                  {billItems.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-surface-600 dark:text-surface-400 truncate flex-1">
-                        {item.medicineName} × {item.quantity}
-                      </span>
-                      <span className="font-semibold ml-2">
-                        {formatCurrency(item.unitPrice * item.quantity)}
-                      </span>
-                    </div>
+              {inventoryResults.length > 0 && createPortal(
+                <Paper sx={{ position: 'fixed', top: '30%', left: '50%', transform: 'translateX(-50%)', width: '500px', maxWidth: '90vw', zIndex: 99999 }}>
+                  <Box sx={{ p: 1, borderBottom: '1px solid #eee', bgcolor: '#f8fafc' }}>
+                    <Typography variant="caption" color="text.secondary">{inventoryResults.length} item(s) found</Typography>
+                  </Box>
+                  {inventoryResults.map((inv) => (
+                    <Box key={inv._id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, cursor: 'pointer', '&:hover': { bgcolor: '#f8fafc' } }}
+                      onClick={() => addItem(inv)}>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {inv.medicine?.brandName} {inv.medicine?.strength}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Stock: {inv.stockQuantity} · {formatCurrency(inv.sellingPrice)}
+                        </Typography>
+                      </Box>
+                      <Add sx={{ color: '#0d9488' }} />
+                    </Box>
                   ))}
-                </div>
+                </Paper>,
+                document.body
+              )}
 
-                <div className="border-t border-surface-200 dark:border-surface-700/50 pt-3 space-y-1.5">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-surface-500">Subtotal</span>
-                    <span>{formatCurrency(subtotal)}</span>
-                  </div>
+              {billItems.length > 0 && (
+                <TableContainer sx={{ mt: 3 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 600 }}>Medicine</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }} align="center">Qty</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }} align="right">Price</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }} align="right">Total</TableCell>
+                        <TableCell></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {billItems.map((item, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {item.medicineName} {item.strength}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="center">
+                            <IconButton size="small" onClick={() => updateQuantity(idx, -1)}>
+                              <Remove fontSize="small" />
+                            </IconButton>
+                            <Typography variant="body2" component="span" sx={{ mx: 1 }}>{item.quantity}</Typography>
+                            <IconButton size="small" onClick={() => updateQuantity(idx, 1)}>
+                              <Add fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                          <TableCell align="right">{formatCurrency(item.unitPrice)}</TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {formatCurrency(item.unitPrice * item.quantity)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <IconButton size="small" color="error" onClick={() => removeItem(idx)}>
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} lg={4}>
+          <Card sx={{ position: 'sticky', top: 20 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>Bill Summary</Typography>
+
+              {billItems.length === 0 ? (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <Receipt sx={{ fontSize: 48, color: '#e5e7eb' }} />
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    No items added yet
+                  </Typography>
+                </Box>
+              ) : (
+                <>
+                  <Box sx={{ mb: 2 }}>
+                    {billItems.map((item, idx) => (
+                      <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="body2" sx={{ flex: 1 }}>
+                          {item.medicineName} x{item.quantity}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {formatCurrency(item.unitPrice * item.quantity)}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Subtotal</Typography>
+                    <Typography variant="body2">{formatCurrency(subtotal)}</Typography>
+                  </Box>
                   {totalDiscount > 0 && (
-                    <div className="flex justify-between text-sm text-red-500">
-                      <span>Discount</span>
-                      <span>-{formatCurrency(totalDiscount)}</span>
-                    </div>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                      <Typography variant="body2">Discount</Typography>
+                      <Typography variant="body2">-{formatCurrency(totalDiscount)}</Typography>
+                    </Box>
                   )}
-                  <div className="flex justify-between text-lg font-display font-extrabold pt-2 border-t border-surface-200 dark:border-surface-700/50">
-                    <span>Total</span>
-                    <span className="gradient-text">{formatCurrency(grandTotal)}</span>
-                  </div>
-                </div>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>Total</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#0d9488' }}>
+                      {formatCurrency(grandTotal)}
+                    </Typography>
+                  </Box>
 
-                {/* Payment */}
-                <div className="mt-4">
-                  <label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Payment Method</label>
-                  <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="input-field text-sm">
-                    {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
-                  </select>
-                </div>
+                  <TextField select label="Payment Method" fullWidth size="small" sx={{ mt: 3 }}
+                    value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                    {['Cash', 'bKash', 'Nagad', 'Card'].map((m) => (
+                      <MenuItem key={m} value={m}>{m}</MenuItem>
+                    ))}
+                  </TextField>
 
-                {/* Notes */}
-                <div className="mt-3">
-                  <label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Notes</label>
-                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-                    placeholder="e.g., Take Napa after meals." className="input-field text-sm resize-none" />
-                </div>
+                  <TextField label="Notes" multiline rows={2} fullWidth size="small" sx={{ mt: 2 }}
+                    value={notes} onChange={(e) => setNotes(e.target.value)} />
 
-                {/* Submit */}
-                <button onClick={handleSubmit} disabled={loading}
-                  className="btn-emerald w-full mt-5 py-3 text-base">
-                  {loading ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Generating...
-                    </span>
-                  ) : (
-                    <>
-                      <HiOutlineReceiptTax className="w-5 h-5" />
-                      Generate Bill
-                    </>
+                  {patient && billItems.length > 0 && (
+                    <Button variant="outlined" color="warning" fullWidth size="small" sx={{ mt: 2 }}
+                      onClick={handleCheckConflicts} startIcon={<Warning />}>
+                      Check Drug Conflicts
+                    </Button>
                   )}
-                </button>
-              </>
-            )}
-          </GlassCard>
-        </div>
-      </div>
-    </div>
+
+                  <Button variant="contained" fullWidth size="large" sx={{ mt: 2 }}
+                    onClick={handleSubmit} disabled={loading} startIcon={<Receipt />}>
+                    {loading ? 'Generating...' : 'Generate Bill'}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
+
+    <Dialog open={showConflictDialog} onClose={() => setShowConflictDialog(false)} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Warning sx={{ color: '#f59e0b' }} />
+        Drug Conflict Warnings
+      </DialogTitle>
+      <DialogContent dividers>
+        {conflictWarnings.map((item, idx) => (
+          <Box key={idx} sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: '#1f2937' }}>
+              {item.medicineName}
+            </Typography>
+            {item.warnings.map((warning, wIdx) => (
+              <Alert
+                key={wIdx}
+                severity={warning.severity === 'red' ? 'error' : 'warning'}
+                icon={warning.severity === 'red' ? <ErrorIcon fontSize="inherit" /> : <Warning fontSize="inherit" />}
+                sx={{ mb: 1 }}
+              >
+                {warning.message}
+              </Alert>
+            ))}
+          </Box>
+        ))}
+      </DialogContent>
+      <DialogActions sx={{ p: 2 }}>
+        <Button onClick={() => setShowConflictDialog(false)} variant="outlined">
+          Cancel Sale
+        </Button>
+        <Button onClick={() => { setShowConflictDialog(false); handleSubmit(); }} variant="contained" color="warning">
+          Proceed Anyway
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </Fragment>
   );
 }

@@ -1,3 +1,10 @@
+/* ─── Import additional style modules ─── */
+@import './styles/animations.css';
+@import './styles/glass.css';
+@import './styles/gradients.css';
+@import './styles/typography.css';
+@import './styles/components.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -252,11 +259,5 @@
     overflow: hidden;
   }
 }
-@import './styles/animations.css';
-/* ─── Import additional style modules ─── */
-@import './styles/animations.css';
-@import './styles/glass.css';
-@import './styles/gradients.css';
-@import './styles/typography.css';
-@import './styles/components.css';
+
 

@@ -9,9 +9,9 @@ const masterMedicineSchema = new mongoose.Schema({
   },
   genericName: {
     type: String,
-    required: [true, 'Generic name is required'],
     trim: true,
-    index: true,
+    default: '',
+    required: false,
   },
   manufacturer: {
     type: String,
@@ -26,7 +26,7 @@ const masterMedicineSchema = new mongoose.Schema({
       'Cardiovascular', 'Respiratory', 'Gastrointestinal', 'Hormonal',
       'Antifungal', 'Antiviral', 'Antihistamine', 'Muscle Relaxant',
       'Antiseptic', 'IV Fluid', 'Surgical Supply', 'Baby Care',
-      'Women Health', 'Other',
+      'Women Health', 'Herbal', 'Homeopathic', 'Other',
     ],
     default: 'Other',
   },
@@ -35,7 +35,8 @@ const masterMedicineSchema = new mongoose.Schema({
     enum: [
       'Tablet', 'Capsule', 'Syrup', 'Suspension', 'Injection', 'Cream',
       'Ointment', 'Gel', 'Drop', 'Inhaler', 'Suppository', 'Powder',
-      'Sachet', 'Patch', 'Spray', 'Solution', 'Lotion', 'Other',
+      'Sachet', 'Patch', 'Spray', 'Solution', 'Lotion', 'Chewable Tablet',
+      'Oral Powder', 'Oral Suspension', 'Other',
     ],
     default: 'Tablet',
   },
@@ -60,6 +61,32 @@ const masterMedicineSchema = new mongoose.Schema({
     conflictingConditions: [{ type: String }],
     conflictingDrugs: [{ type: String }],
     allergyTriggers: [{ type: String }],
+    bloodGroupRestrictions: {
+      incompatible: [{ type: String }],
+      note: String,
+    },
+    vitalThresholds: {
+      bloodPressure: {
+        maxSystolic: Number,
+        maxDiastolic: Number,
+        minSystolic: Number,
+        minDiastolic: Number,
+      },
+      heartRate: {
+        maxBpm: Number,
+        minBpm: Number,
+      },
+      bloodSugar: {
+        maxSugar: Number,
+        minSugar: Number,
+      },
+      bloodOxygen: {
+        minSpo2: Number,
+      },
+      temperature: {
+        maxTemp: Number,
+      },
+    },
   },
   usageInstructions: {
     type: String,

@@ -43,7 +43,18 @@ router.get('/pharmacies', protect, isAdmin, async (req, res, next) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
-    res.json({ success: true, data: { stores, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } } });
+    res.json({ 
+      success: true, 
+      data: { 
+        stores, 
+        pagination: { 
+          page: parseInt(page), 
+          limit: parseInt(limit), 
+          total, 
+          pages: Math.ceil(total / limit) 
+        } 
+      } 
+    });
   } catch (error) {
     next(error);
   }
@@ -72,13 +83,24 @@ router.get('/patients', protect, isAdmin, async (req, res, next) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
-    res.json({ success: true, data: { patients, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } } });
+    res.json({ 
+      success: true, 
+      data: { 
+        patients, 
+        pagination: { 
+          page: parseInt(page), 
+          limit: parseInt(limit), 
+          total, 
+          pages: Math.ceil(total / limit) 
+        } 
+      } 
+    });
   } catch (error) {
     next(error);
   }
 });
 
-// Add medicine to master DB
+// Manage master medicines
 router.post('/medicines', protect, isAdmin, async (req, res, next) => {
   try {
     const medicine = await MasterMedicine.create(req.body);
@@ -88,7 +110,6 @@ router.post('/medicines', protect, isAdmin, async (req, res, next) => {
   }
 });
 
-// Update master medicine
 router.put('/medicines/:id', protect, isAdmin, async (req, res, next) => {
   try {
     const medicine = await MasterMedicine.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });

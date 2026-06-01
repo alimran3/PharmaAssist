@@ -1,4 +1,5 @@
 import { classNames } from '../../utils/helpers';
+import { HiOutlineBuildingOffice, HiOutlineUsers, HiOutlineBeaker, HiOutlineReceiptRefund, HiOutlineExclamationCircle } from 'react-icons/hi2';
 
 export default function GlassCard({ children, className = '', hover = false, padding = 'p-5', onClick }) {
   return (
@@ -16,6 +17,14 @@ export default function GlassCard({ children, className = '', hover = false, pad
     </div>
   );
 }
+
+const iconColorMap = {
+  brand: '#2a8bff',
+  emerald: '#10b981',
+  amber: '#f59e0b',
+  red: '#ef4444',
+  purple: '#8b5cf6',
+};
 
 export function StatCard({ icon: Icon, label, value, subValue, trend, color = 'brand' }) {
   const colorMap = {
@@ -48,10 +57,9 @@ export function StatCard({ icon: Icon, label, value, subValue, trend, color = 'b
           )}
         </div>
         <div className={`p-3 rounded-xl ${bgMap[color]} transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
-          <Icon className={`w-6 h-6 bg-gradient-to-br ${colorMap[color]} bg-clip-text text-transparent`} style={{ WebkitTextFillColor: 'unset', color: color === 'brand' ? '#2a8bff' : color === 'emerald' ? '#10b981' : color === 'amber' ? '#f59e0b' : color === 'red' ? '#ef4444' : '#8b5cf6' }} />
+          {Icon && <Icon className={`w-6 h-6`} style={{ color: iconColorMap[color] }} />}
         </div>
       </div>
-      {/* Decorative accent */}
       <div className={`absolute -bottom-4 -right-4 w-24 h-24 rounded-full bg-gradient-to-br ${colorMap[color]} opacity-[0.04] group-hover:opacity-[0.08] transition-opacity duration-500`} />
     </GlassCard>
   );

@@ -113,7 +113,6 @@ billSchema.pre('validate', async function () {
 
 billSchema.index({ store: 1, createdAt: -1 });
 billSchema.index({ patient: 1, createdAt: -1 });
-billSchema.index({ billNumber: 1 });
 
 const Bill = mongoose.model('Bill', billSchema);
 export default Bill;

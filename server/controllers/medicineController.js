@@ -31,7 +31,7 @@ const getFuseInstance = async () => {
 // Fuzzy search medicines
 export const searchMedicines = async (req, res, next) => {
   try {
-    const { q, category, dosageForm, page = 1, limit = 20 } = req.query;
+    const { q, category, dosageForm, page = 1, limit = 1000 } = req.query;
 
     if (!q || q.trim().length < 2) {
       // Return category-based or all

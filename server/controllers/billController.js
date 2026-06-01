@@ -6,6 +6,52 @@ import Notification from '../models/Notification.js';
 import { checkConflicts } from '../utils/conflictChecker.js';
 import { generateBillPDF } from '../utils/pdfGenerator.js';
 
+// Check conflicts before creating bill
+export const checkBillConflicts = async (req, res, next) => {
+  try {
+    const { patientId, items } = req.body;
+
+    if (!patientId || !items || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Patient ID and items are required.' });
+    }
+
+    const patient = await User.findById(patientId);
+    if (!patient) {
+      return res.status(404).json({ success: false, message: 'Patient not found.' });
+    }
+
+    const allWarnings = [];
+
+    for (const item of items) {
+      const inventoryItem = await StoreInventory.findById(item.inventoryItemId).populate('medicine');
+      if (!inventoryItem) continue;
+
+      const warnings = await checkConflicts(patient, inventoryItem.medicine);
+      allWarnings.push({
+        inventoryItemId: item.inventoryItemId,
+        medicineName: inventoryItem.medicine.brandName,
+        warnings,
+      });
+    }
+
+    const redCount = allWarnings.flatMap((w) => w.warnings).filter((w) => w.severity === 'red').length;
+    const yellowCount = allWarnings.flatMap((w) => w.warnings).filter((w) => w.severity === 'yellow').length;
+
+    res.json({
+      success: true,
+      data: {
+        warnings: allWarnings,
+        totalRed: redCount,
+        totalYellow: yellowCount,
+        hasConflicts: redCount > 0 || yellowCount > 0,
+        canProceed: redCount === 0,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Create a new bill
 export const createBill = async (req, res, next) => {
   try {
@@ -150,6 +196,66 @@ export const createBill = async (req, res, next) => {
 
     // Notify patient
     if (patient) {
+      const allConflicts = billItems.flatMap((item) => item.conflictWarnings || []);
+      const redConflicts = allConflicts.filter((w) => w.severity === 'red');
+      const yellowConflicts = allConflicts.filter((w) => w.severity === 'yellow');
+
+      // Send conflict alert notification if there are any warnings
+      if (allConflicts.length > 0) {
+        const conflictMessages = allConflicts.map((w) => `• ${w.message}`).join('\n');
+        
+        await Notification.create({
+          recipient: patient._id,
+          type: 'conflictAlert',
+          title: `Drug Safety Alert from ${store.pharmacyName}`,
+          message: `${allConflicts.length} warning(s) detected for your recent purchase. Please consult your doctor.`,
+          priority: redConflicts.length > 0 ? 'critical' : 'medium',
+          data: {
+            billId: bill._id,
+            storeId: store._id,
+            conflictCount: allConflicts.length,
+            redCount: redConflicts.length,
+            yellowCount: yellowConflicts.length,
+            conflicts: allConflicts.map((w) => ({
+              type: w.type,
+              severity: w.severity,
+              message: w.message,
+              medicineName: billItems.find((bi) => 
+                bi.conflictWarnings?.some((cw) => cw.message === w.message)
+              )?.medicineName || '',
+            })),
+          },
+        });
+
+        // Also notify the store owner about critical conflicts
+        if (redConflicts.length > 0) {
+          await Notification.create({
+            recipient: req.user._id,
+            type: 'conflictAlert',
+            title: 'Critical Conflict Alert',
+            message: `${redConflicts.length} critical conflict(s) detected for patient ${patient.fullName}. Sale completed but patient was notified.`,
+            priority: 'critical',
+            data: {
+              billId: bill._id,
+              patientId: patient._id,
+              patientName: patient.fullName,
+              conflictCount: redConflicts.length,
+            },
+          });
+        }
+
+        // Emit socket event for real-time conflict alert
+        const io = req.app.get('io');
+        if (io) {
+          io.emit(`notification:${patient._id}`, {
+            type: 'conflictAlert',
+            priority: redConflicts.length > 0 ? 'critical' : 'medium',
+            message: `Drug safety alert: ${allConflicts.length} warning(s) detected.`,
+            data: { billId: bill._id },
+          });
+        }
+      }
+
       await Notification.create({
         recipient: patient._id,
         type: 'purchaseConfirmation',
@@ -158,6 +264,15 @@ export const createBill = async (req, res, next) => {
         priority: 'low',
         data: { billId: bill._id, storeId: store._id },
       });
+
+      const medicineIds = billItems.map((item) => item.medicine);
+      const existingIds = patient.currentMedicines.map((id) => id.toString());
+      const newMedicines = medicineIds.filter((id) => !existingIds.includes(id.toString()));
+      
+      if (newMedicines.length > 0) {
+        patient.currentMedicines = [...patient.currentMedicines, ...newMedicines];
+        await patient.save();
+      }
     }
 
     // Emit socket event

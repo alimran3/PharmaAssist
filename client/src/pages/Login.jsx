@@ -4,7 +4,13 @@ import { useDispatch } from 'react-redux';
 import { loginUser, clearError } from '../store/slices/authSlice';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
-import { HiOutlineMail, HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
+import {
+  Box, Container, Typography, TextField, Button, Card, CardContent,
+  InputAdornment, IconButton, Stack, Divider,
+} from '@mui/material';
+import {
+  Visibility, VisibilityOff, Email, Lock, LocalPharmacy,
+} from '@mui/icons-material';
 
 export default function Login() {
   const dispatch = useDispatch();
@@ -31,87 +37,100 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden">
-      {/* Decorative blobs */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-brand-500/[0.08] blur-[100px]" />
-        <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full bg-emerald-500/[0.06] blur-[100px]" />
-      </div>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+      <Card sx={{ maxWidth: 440, width: '100%', p: 1 }}>
+        <CardContent sx={{ p: 4 }}>
+          <Box sx={{ textAlign: 'center', mb: 4 }}>
+            <Box sx={{
+              width: 56, height: 56, borderRadius: 2,
+              bgcolor: '#0d9488', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              mx: 'auto', mb: 2
+            }}>
+              <Typography sx={{ color: '#fff', fontWeight: 800, fontSize: 24 }}>P</Typography>
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              pharma<span style={{ color: '#0d9488' }}>Assist</span>
+            </Typography>
+          </Box>
 
-      {/* Left panel - visual */}
-      <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-12 relative">
-        <div className="max-w-md text-center">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-brand-500 to-emerald-500 flex items-center justify-center shadow-neon mb-8">
-            <span className="text-white font-display font-extrabold text-3xl">P</span>
-          </div>
-          <h2 className="text-4xl font-display font-extrabold">
-            <span className="gradient-text">pharma</span>
-            <span className="text-surface-700 dark:text-surface-300">Assist</span>
-          </h2>
-          <p className="mt-4 text-surface-500 text-lg">Your Neighborhood Pharmacy, Now Digital</p>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Welcome back</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Sign in to continue to your dashboard
+          </Typography>
 
-          <div className="mt-12 grid grid-cols-2 gap-4">
-            {['Smart Search', 'Health Tracking', 'Drug Safety', 'POS System'].map((f, i) => (
-              <div key={i} className="glass rounded-xl p-4 text-left">
-                <p className="text-sm font-semibold text-surface-700 dark:text-surface-300">{f}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+          <Box component="form" onSubmit={handleSubmit}>
+            <Stack spacing={2.5}>
+              <TextField
+                label="Email or Phone"
+                type="text"
+                fullWidth
+                size="small"
+                value={form.emailOrPhone}
+                onChange={(e) => setForm({ ...form, emailOrPhone: e.target.value })}
+                placeholder="you@example.com or 01XXXXXXXXX"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Email sx={{ color: '#9ca3af', fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
 
-      {/* Right panel - form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-md">
-          <div className="lg:hidden flex items-center gap-2.5 mb-8">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-emerald-500 flex items-center justify-center shadow-neon">
-              <span className="text-white font-display font-extrabold text-sm">P</span>
-            </div>
-            <span className="font-display font-bold text-xl"><span className="gradient-text">pharma</span><span className="text-surface-700 dark:text-surface-300">Assist</span></span>
-          </div>
+              <TextField
+                label="Password"
+                type={showPassword ? 'text' : 'password'}
+                fullWidth
+                size="small"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder="Enter your password"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Lock sx={{ color: '#9ca3af', fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">
+                        {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
 
-          <h1 className="text-3xl font-display font-extrabold text-surface-900 dark:text-white">Welcome back</h1>
-          <p className="mt-2 text-surface-500">Sign in to continue to your dashboard.</p>
+              <Button
+                type="submit"
+                variant="contained"
+                fullWidth
+                size="large"
+                disabled={loading}
+                sx={{ py: 1.5, fontWeight: 600 }}
+              >
+                {loading ? 'Signing in...' : 'Sign In'}
+              </Button>
+            </Stack>
+          </Box>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            <div>
-              <label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Email or Phone</label>
-              <div className="relative">
-                <HiOutlineMail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                <input type="text" value={form.emailOrPhone} onChange={(e) => setForm({ ...form, emailOrPhone: e.target.value })} placeholder="you@example.com or 01XXXXXXXXX" className="input-field pl-11" />
-              </div>
-            </div>
+          <Divider sx={{ my: 3 }} />
 
-            <div>
-              <label className="block text-xs font-semibold text-surface-600 dark:text-surface-400 mb-1.5">Password</label>
-              <div className="relative">
-                <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Enter your password" className="input-field pl-11 pr-11" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600 transition-colors">
-                  {showPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3.5 rounded-2xl text-base">
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
-                </span>
-              ) : 'Sign In'}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-surface-500">
+          <Typography variant="body2" color="text.secondary" align="center">
             Don't have an account?{' '}
-            <Link to="/register" className="font-semibold text-brand-500 hover:text-brand-600 transition-colors">Create one</Link>
-          </p>
-          <p className="mt-2 text-center">
-            <Link to="/" className="text-xs text-surface-400 hover:text-surface-600 transition-colors">← Back to home</Link>
-          </p>
-        </div>
-      </div>
-    </div>
+            <Link to="/register" style={{ color: '#0d9488', textDecoration: 'none', fontWeight: 600 }}>
+              Create one
+            </Link>
+          </Typography>
+
+          <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block', mt: 2 }}>
+            <Link to="/" style={{ color: '#6b7280', textDecoration: 'none' }}>
+              Back to home
+            </Link>
+          </Typography>
+        </CardContent>
+      </Card>
+    </Box>
   );
 }

@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import MasterMedicine from '../models/MasterMedicine.js';
+import StoreInventory from '../models/StoreInventory.js';
+import Store from '../models/Store.js';
 import connectDB from '../config/db.js';
 
 dotenv.config();
@@ -32,6 +34,9 @@ const categoryMap = {
   nsaid: 'Painkiller',
   antipyretic: 'Painkiller',
   ppi: 'Antacid',
+  allopathic: 'Other',
+  herbal: 'Herbal',
+  homoeopathic: 'Homeopathic',
 };
 
 const dosageFormMap = {
@@ -49,6 +54,11 @@ const dosageFormMap = {
   powder: 'Powder',
   sachet: 'Sachet',
   solution: 'Solution',
+  'chewable tablet': 'Chewable Tablet',
+  'oral powder': 'Oral Powder',
+  'oral suspension': 'Oral Suspension',
+  'iv injection': 'Injection',
+  'scalp solution': 'Solution',
 };
 
 const mapCategory = (rawCategory) => {
@@ -88,17 +98,23 @@ const seedMedicines = async () => {
       fs.createReadStream(csvPath)
         .pipe(csv())
         .on('data', (row) => {
+          const brandName = row['brand name'] || row['brand_name'] || '';
+          if (!brandName) return;
+          
+          const priceMatch = (row['Package Size'] || row['package container'] || '').match(/৳\s*([\d.]+)/);
+          const price = priceMatch ? parseFloat(priceMatch[1]) : 0;
+          
           medicines.push({
-            brandName: row.brand_name || row.name || row.Brand_Name || '',
-            genericName: row.generic_name || row.generic || row.Generic_Name || '',
-            manufacturer: row.manufacturer || row.company || row.Manufacturer || '',
-            category: mapCategory(row.category || row.type || row.Category || ''),
-            dosageForm: mapDosageForm(row.dosage_form || row.form || row.Dosage_Form || ''),
-            strength: row.strength || row.dosage || row.Strength || '',
-            standardMrp: parseFloat(row.price || row.mrp || row.Price || 0) || 0,
-            description: row.description || row.indication || row.Description || '',
-            prescriptionRequired: (row.prescription || '').toLowerCase() === 'yes',
-            imageUrl: row.image_url || row.image || '',
+            brandName: brandName,
+            genericName: row.generic || row['generic'] || '',
+            manufacturer: row.manufacturer || '',
+            category: mapCategory(row.type || row.category || ''),
+            dosageForm: mapDosageForm(row['dosage form'] || row['dosage_form'] || ''),
+            strength: row.strength || '',
+            standardMrp: price,
+            description: '',
+            prescriptionRequired: row.type?.toLowerCase() === 'antibiotic',
+            imageUrl: '',
             status: 'Active',
           });
         })
@@ -109,12 +125,15 @@ const seedMedicines = async () => {
     if (medicines.length > 0) {
       await MasterMedicine.deleteMany({});
       await MasterMedicine.insertMany(medicines, { ordered: false });
-      console.log(`Successfully seeded ${medicines.length} medicines.`);
+      console.log(`Successfully seeded ${medicines.length} medicines to master DB.`);
     }
 
+    console.log('\nSeeding complete!');
+    console.log('Run: npm run dev to start the server');
+    console.log('Pharmacy owners can manually add medicines to their inventory from master DB.');
     process.exit(0);
   } catch (error) {
-    console.error('Seeding error:', error);
+    console.error('Seeding error:', error.message);
     process.exit(1);
   }
 };
@@ -145,8 +164,43 @@ const createSampleMedicines = async () => {
 
   await MasterMedicine.deleteMany({});
   await MasterMedicine.insertMany(samples);
-  console.log(`Created ${samples.length} sample medicines.`);
+  console.log(`Created ${samples.length} sample medicines in master DB.`);
+
+  console.log('\nSeeding complete!');
+  console.log('Pharmacy owners can manually add medicines to their inventory from master DB.');
   process.exit(0);
+};
+
+const addToPharmacyInventory = async (medicines) => {
+  const stores = await Store.find({ status: 'active' });
+  
+  if (stores.length === 0) {
+    console.log('No active pharmacies found. Medicines added to master DB only.');
+    return;
+  }
+
+  const expiryDate = new Date();
+  expiryDate.setFullYear(expiryDate.getFullYear() + 2);
+
+  for (const store of stores) {
+    const inventoryItems = medicines.map((medicine) => ({
+      store: store._id,
+      medicine: medicine._id,
+      batchNumber: '',
+      buyingDate: new Date(),
+      expiryDate: expiryDate,
+      buyingPrice: medicine.standardMrp * 0.7,
+      sellingPrice: medicine.standardMrp,
+      discountPercentage: 0,
+      stockQuantity: 100,
+      imageUrl: medicine.imageUrl || '',
+      notes: 'Auto-seeded from master database',
+      status: 'active',
+    }));
+
+    await StoreInventory.insertMany(inventoryItems);
+    console.log(`Added ${inventoryItems.length} medicines to ${store.pharmacyName} inventory.`);
+  }
 };
 
 seedMedicines();

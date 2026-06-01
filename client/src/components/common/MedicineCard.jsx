@@ -1,6 +1,7 @@
 import { HiOutlineLocationMarker, HiOutlineClock } from 'react-icons/hi';
 import { getMedicineImage, formatCurrency } from '../../utils/helpers';
 import { CATEGORY_ICONS } from '../../utils/constants';
+import { LocalPharmacy } from '@mui/icons-material';
 
 export default function MedicineCard({ item, onClick }) {
   const medicine = item.medicine || item;
@@ -23,7 +24,10 @@ export default function MedicineCard({ item, onClick }) {
         {/* Category badge */}
         <div className="absolute top-3 left-3">
           <span className="badge bg-white/80 dark:bg-surface-900/80 backdrop-blur-sm text-surface-700 dark:text-surface-300 text-[10px]">
-            {CATEGORY_ICONS[medicine.category] || '📦'} {medicine.category}
+            {(() => {
+              const IconComp = CATEGORY_ICONS[medicine.category];
+              return IconComp ? <IconComp sx={{ fontSize: 12 }} /> : '📦';
+            })()} {medicine.category}
           </span>
         </div>
         {/* Discount badge */}

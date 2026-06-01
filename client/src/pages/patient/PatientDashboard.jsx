@@ -1,18 +1,27 @@
 import { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
-import { browseMedicines, fetchCategories } from '../../store/slices/medicineSlice';
+import { useDispatch, useSelector } from 'react-redux';
 import { useAuth } from '../../hooks/useAuth';
+import { browseMedicines, fetchCategories } from '../../store/slices/medicineSlice';
+import { CATEGORY_ICONS } from '../../utils/constants';
+import {
+  Box, Typography, Button, Card, CardContent, TextField,
+  InputAdornment, Chip, Stack, CircularProgress,
+} from '@mui/material';
+import {
+  Search, LocalPharmacy, Inventory2, FilterList,
+  EmojiEvents, LocationOn,
+} from '@mui/icons-material';
 import SearchBar from '../../components/common/SearchBar';
 import MedicineCard from '../../components/common/MedicineCard';
-import { CATEGORY_ICONS } from '../../utils/constants';
-import { HiOutlineLocationMarker, HiOutlineAdjustments } from 'react-icons/hi';
+
+import api from '../../utils/api';
 
 export default function PatientDashboard() {
-  const dispatch = useDispatch();
   const { user } = useAuth();
   const { browseResults, categories, loading } = useSelector((s) => s.medicines);
   const location = useSelector((s) => s.location.current);
+  const dispatch = useDispatch();
   const [activeCategory, setActiveCategory] = useState('');
 
   useEffect(() => {
@@ -37,93 +46,78 @@ export default function PatientDashboard() {
     }));
   };
 
-  return (
-    <div className="page-container">
-      {/* Welcome */}
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-surface-900 dark:text-white">
-          Hey, {user?.fullName?.split(' ')[0]} 👋
-        </h1>
-        <div className="flex items-center gap-2 mt-1.5">
-          <HiOutlineLocationMarker className="w-4 h-4 text-brand-500" />
-          <span className="text-sm text-surface-500">
-            {[location.area, location.upazilla, location.district].filter(Boolean).join(', ') || 'Set your location'}
-          </span>
-          <Link to="/patient/settings" className="text-xs font-semibold text-brand-500 hover:text-brand-600 ml-1">Change</Link>
-        </div>
-      </div>
+  const firstName = user?.fullName?.split(' ')[0] || 'there';
 
-      {/* Search */}
+  return (
+    <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+          Hey, {firstName}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+          <LocationOn sx={{ fontSize: 16, color: '#0d9488' }} />
+          <Typography variant="body2" color="text.secondary">
+            {[location.area, location.upazilla, location.district].filter(Boolean).join(', ') || 'Set your location'}
+          </Typography>
+          <Button size="small" component={Link} to="/patient/settings" sx={{ ml: 1 }}>
+            Change
+          </Button>
+        </Box>
+      </Box>
+
       <SearchBar
         onSearch={handleSearch}
         placeholder="Search medicine by name, generic, or category..."
-        className="mb-6"
+        sx={{ mb: 3 }}
       />
 
-      {/* Category Quick Filters */}
-      <div className="mb-6 -mx-4 px-4">
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-          <button
-            onClick={() => setActiveCategory('')}
-            className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200
-              ${!activeCategory
-                ? 'bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/20'
-                : 'glass hover:bg-surface-100 dark:hover:bg-surface-800 text-surface-600 dark:text-surface-400'
-              }`}
-          >
-            All
-          </button>
-          {categories.slice(0, 12).map((cat) => (
-            <button
+      <Box sx={{ mb: 3, display: 'flex', gap: 1, overflowX: 'auto', pb: 2 }}>
+        <Chip
+          label="All"
+          icon={<LocalPharmacy />}
+          onClick={() => setActiveCategory('')}
+          color={!activeCategory ? 'primary' : 'default'}
+          sx={{ flexShrink: 0 }}
+        />
+        {categories.slice(0, 12).map((cat) => {
+          const IconComponent = CATEGORY_ICONS[cat];
+          return (
+            <Chip
               key={cat}
-              onClick={() => setActiveCategory(cat === activeCategory ? '' : cat)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200
-                ${activeCategory === cat
-                  ? 'bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/20'
-                  : 'glass hover:bg-surface-100 dark:hover:bg-surface-800 text-surface-600 dark:text-surface-400'
-                }`}
-            >
-              <span>{CATEGORY_ICONS[cat] || '📦'}</span>
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
+              label={cat}
+              icon={IconComponent ? <IconComponent /> : <LocalPharmacy />}
+              onClick={() => setActiveCategory(activeCategory === cat ? '' : cat)}
+              color={activeCategory === cat ? 'primary' : 'default'}
+              sx={{ flexShrink: 0 }}
+            />
+          );
+        })}
+      </Box>
 
-      {/* Medicine Grid */}
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="section-title text-lg">
-          {activeCategory ? `${CATEGORY_ICONS[activeCategory] || ''} ${activeCategory}` : 'Medicines Near You'}
-        </h2>
-        <span className="text-xs text-surface-500">{browseResults.length} found</span>
-      </div>
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          {activeCategory || 'Medicines Near You'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {browseResults.length} found
+        </Typography>
+      </Box>
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="glass rounded-2xl overflow-hidden animate-pulse">
-              <div className="h-40 bg-surface-200 dark:bg-surface-800" />
-              <div className="p-4 space-y-2">
-                <div className="h-4 w-3/4 bg-surface-200 dark:bg-surface-700 rounded" />
-                <div className="h-3 w-1/2 bg-surface-100 dark:bg-surface-800 rounded" />
-                <div className="h-5 w-1/3 bg-surface-200 dark:bg-surface-700 rounded mt-3" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <Box sx={{ py: 8, textAlign: 'center' }}><CircularProgress /></Box>
       ) : browseResults.length === 0 ? (
-        <div className="glass rounded-2xl p-12 text-center">
-          <p className="text-4xl mb-3">🔍</p>
-          <p className="font-display font-bold text-lg text-surface-700 dark:text-surface-300">No medicines found</p>
-          <p className="text-sm text-surface-500 mt-1">Try changing your location or search term.</p>
-        </div>
+        <Card sx={{ py: 8, textAlign: 'center' }}>
+          <Search sx={{ fontSize: 64, color: '#e5e7eb' }} />
+          <Typography variant="h6" sx={{ mt: 2 }}>No medicines found</Typography>
+          <Typography variant="body2" color="text.secondary">Try changing your location or search term.</Typography>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
           {browseResults.map((item) => (
             <MedicineCard key={item._id} item={item} />
           ))}
-        </div>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 }

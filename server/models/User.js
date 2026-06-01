@@ -166,8 +166,6 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 };
 
 // Index for search
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 });
 userSchema.index({ 'appAddress.division': 1, 'appAddress.district': 1, 'appAddress.upazilla': 1 });
 
 const User = mongoose.model('User', userSchema);

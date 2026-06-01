@@ -4,13 +4,6 @@ import { HiOutlineBell, HiOutlineCheck } from 'react-icons/hi';
 import { fetchNotifications, markAsRead, markAllRead } from '../../store/slices/notificationSlice';
 import { formatDateTime } from '../../utils/helpers';
 
-const priorityColors = {
-  low: 'border-l-surface-300',
-  medium: 'border-l-brand-400',
-  high: 'border-l-amber-500',
-  critical: 'border-l-red-500',
-};
-
 const typeIcons = {
   lowStock: '📦',
   outOfStock: '🚫',
@@ -23,6 +16,21 @@ const typeIcons = {
   systemUpdate: '🔔',
   conflictAlert: '⚠️',
 };
+
+const priorityStyles = {
+  low: 'border-l-surface-300',
+  medium: 'border-l-brand-400',
+  high: 'border-l-amber-500',
+  critical: 'border-l-red-500',
+};
+
+const ConflictIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
 
 export default function NotificationBell() {
   const dispatch = useDispatch();
@@ -98,36 +106,47 @@ export default function NotificationBell() {
                 <p className="text-sm text-surface-400">No notifications yet</p>
               </div>
             ) : (
-              items.map((notif) => (
-                <div
-                  key={notif._id}
-                  onClick={() => !notif.read && handleMarkRead(notif._id)}
-                  className={`
-                    p-3.5 border-l-[3px] cursor-pointer
-                    hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors
-                    ${priorityColors[notif.priority] || priorityColors.medium}
-                    ${!notif.read ? 'bg-brand-50/30 dark:bg-brand-900/10' : ''}
-                  `}
-                >
-                  <div className="flex items-start gap-2.5">
-                    <span className="text-base flex-shrink-0 mt-0.5">
-                      {typeIcons[notif.type] || '🔔'}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className={`text-sm font-medium line-clamp-2 ${!notif.read ? 'text-surface-900 dark:text-white' : 'text-surface-600 dark:text-surface-400'}`}>
-                          {notif.title}
-                        </p>
-                        {!notif.read && (
-                          <span className="w-2 h-2 rounded-full bg-brand-500 flex-shrink-0" />
+              items.map((notif) => {
+                const isConflictAlert = notif.type === 'conflictAlert';
+                const priorityKey = isConflictAlert && notif.priority === 'critical' ? 'critical' : notif.priority;
+                
+                return (
+                  <div
+                    key={notif._id}
+                    onClick={() => !notif.read && handleMarkRead(notif._id)}
+                    className={`
+                      p-3.5 border-l-[3px] cursor-pointer
+                      hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors
+                      ${priorityStyles[priorityKey] || priorityStyles.medium}
+                      ${!notif.read ? 'bg-brand-50/30 dark:bg-brand-900/10' : ''}
+                      ${isConflictAlert ? (notif.priority === 'critical' ? 'bg-red-50/50 dark:bg-red-900/20' : 'bg-amber-50/30 dark:bg-amber-900/10') : ''}
+                    `}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <span className={`text-base flex-shrink-0 mt-0.5 ${isConflictAlert ? (notif.priority === 'critical' ? 'text-red-500' : 'text-amber-500') : 'text-surface-500'}`}>
+                        {isConflictAlert ? <ConflictIcon /> : (typeIcons[notif.type] || '🔔')}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className={`text-sm font-medium line-clamp-2 ${!notif.read ? 'text-surface-900 dark:text-white' : 'text-surface-600 dark:text-surface-400'}`}>
+                            {notif.title}
+                          </p>
+                          {!notif.read && (
+                            <span className="w-2 h-2 rounded-full bg-brand-500 flex-shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-xs text-surface-500 mt-0.5 line-clamp-2">{notif.message}</p>
+                        {isConflictAlert && notif.data?.conflictCount > 0 && (
+                          <div className="mt-1.5 text-[10px] text-red-600 dark:text-red-400 font-medium">
+                            {notif.data.conflictCount} warning(s): {notif.data.redCount > 0 ? `${notif.data.redCount} critical` : ''}{notif.data.redCount > 0 && notif.data.yellowCount > 0 ? ', ' : ''}{notif.data.yellowCount > 0 ? `${notif.data.yellowCount} caution` : ''}
+                          </div>
                         )}
+                        <p className="text-[10px] text-surface-400 mt-1">{formatDateTime(notif.createdAt)}</p>
                       </div>
-                      <p className="text-xs text-surface-500 mt-0.5 line-clamp-2">{notif.message}</p>
-                      <p className="text-[10px] text-surface-400 mt-1">{formatDateTime(notif.createdAt)}</p>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 

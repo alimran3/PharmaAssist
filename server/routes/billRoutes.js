@@ -5,11 +5,15 @@ import {
   getBillById,
   getPatientPurchaseHistory,
   downloadBillPDF,
+  checkBillConflicts,
 } from '../controllers/billController.js';
 import { protect } from '../middleware/auth.js';
 import { isStoreOwner, isPatient } from '../middleware/roleGuard.js';
 
 const router = express.Router();
+
+// Check conflicts before creating bill
+router.post('/check-conflicts', protect, isStoreOwner, checkBillConflicts);
 
 // Store owner routes
 router.post('/', protect, isStoreOwner, createBill);
